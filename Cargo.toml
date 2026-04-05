@@ -1,0 +1,39 @@
+[package]
+name = "cargo-npm"
+version = "0.1.0"
+edition = "2024"
+description = "Package and distribute Rust CLI binaries as npm packages"
+repository = "https://github.com/abemedia/cargo-npm"
+license = "MIT"
+
+[[bin]]
+name = "cargo-npm"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+cargo-config2 = "0.1"
+cargo_metadata = "0.23"
+clap = { version = "4", features = ["derive"] }
+flate2 = "1"
+glob = "0.3.3"
+path-clean = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+strum = { version = "0.28", features = ["derive"] }
+tar = "0.4"
+tempfile = "3"
+tokio = { version = "1", features = ["macros", "process", "rt"] }
+
+[dev-dependencies]
+toml = "1"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+
+[profile.release]
+opt-level = "z"
+strip = true
+lto = true
+panic = "abort"
+codegen-units = 1
