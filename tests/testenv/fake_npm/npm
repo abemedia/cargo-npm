@@ -1,0 +1,52 @@
+#!/bin/sh
+case "$1" in
+  --version)
+    echo "0.0.0-fake"
+    ;;
+  view)
+    spec="$2"
+    if [ -f "$FAKE_NPM_LOG" ]; then
+      while IFS= read -r line; do
+        name="${line%%	*}"
+        rest="${line#*	}"
+        ver="${rest%%	*}"
+        if [ "${name}@${ver}" = "$spec" ]; then
+          echo "$ver"
+          exit 0
+        fi
+      done < "$FAKE_NPM_LOG"
+    fi
+    echo "npm error code E404" >&2
+    exit 1
+    ;;
+  publish)
+    case "$2" in
+    *.tgz | *.tar.gz)
+      json=$(tar -xzOf "$2" package/package.json 2>/dev/null)
+      ;;
+    *)
+      json=$(cat "$2/package.json" 2>/dev/null)
+      ;;
+    esac
+    pkg_name=$(printf '%s' "$json" | grep '"name"' | cut -d'"' -f4)
+    pkg_ver=$(printf '%s' "$json" | grep '"version"' | cut -d'"' -f4)
+    if [ -z "$pkg_name" ] || [ -z "$pkg_ver" ]; then
+      echo "npm error: could not read package metadata from $2" >&2
+      exit 1
+    fi
+    spec="${pkg_name}@${pkg_ver}"
+    if [ -f "$FAKE_NPM_LOG" ]; then
+      while IFS= read -r line; do
+        logged_name="${line%%	*}"
+        logged_rest="${line#*	}"
+        logged_ver="${logged_rest%%	*}"
+        if [ "${logged_name}@${logged_ver}" = "$spec" ]; then
+          echo "npm error: cannot publish over the previously published versions." >&2
+          exit 1
+        fi
+      done < "$FAKE_NPM_LOG"
+    fi
+    shift 2
+    printf '%s\t%s\t%s\n' "$pkg_name" "$pkg_ver" "$*" >> "$FAKE_NPM_LOG"
+    ;;
+esac
