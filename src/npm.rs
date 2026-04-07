@@ -40,16 +40,6 @@ pub fn platform_package_name(prefix: &str, platform: &Platform) -> String {
 /// # Returns
 ///
 /// `PackageInfo` containing the package `name`, `version`, and `Some(platform)`.
-///
-/// # Examples
-///
-/// ```no_run
-/// use std::path::Path;
-/// // Assume `job` and `platform` are constructed appropriately for your crate.
-/// let out = Path::new("dist");
-/// let pkg = generate_platform_package(out, &platform, "my-tool-linux-x64", &job).unwrap();
-/// assert_eq!(pkg.name, "my-tool-linux-x64");
-/// ```
 pub fn generate_platform_package(
     output_dir: &Path,
     platform: &Platform,
@@ -115,17 +105,6 @@ pub fn build_platform_json(pkg_name: &str, job: &Job, platform: &Platform) -> Va
 /// Generate the main npm package directory for `job` under `output_dir`, including JS shims and a merged `package.json` that references the provided platform packages as `optionalDependencies`.
 ///
 /// The function creates a `bin/` directory, writes executable shim files for each declared bin, merges or builds the main `package.json` according to the job's mode, removes `optionalDependencies` when no platform packages are provided, writes the resulting JSON, and copies license/README files from the crate directory into the package directory.
-///
-/// # Examples
-///
-/// ```no_run
-/// use std::path::Path;
-///
-/// // Generate the main package into ./out for a prepared `job` and list of platform packages.
-/// // `job` and `platform_packages` must be constructed according to the crate's types.
-/// let out = Path::new("./out");
-/// let _ = crate::npm::generate_main_package(out, &job, &platform_packages);
-/// ```
 pub fn generate_main_package(
     output_dir: &Path,
     job: &Job,
@@ -204,17 +183,6 @@ pub fn generate_main_package(
 ///
 /// Returns an error when `job.meta.custom` contains a forbidden `"name"` field or when a custom
 /// `"bin"`/`"optionalDependencies"` entry would overwrite a generated key.
-///
-/// # Examples
-///
-/// ```
-/// use std::collections::BTreeMap;
-/// // `example_job()` is a test helper that returns a `Job` populated with sensible defaults.
-/// let job = crate::test_helpers::example_job();
-/// let platform_packages: BTreeMap<&str, &str> = BTreeMap::new();
-/// let pkg_json = crate::npm::build_main_json(&job, &platform_packages).unwrap();
-/// assert_eq!(pkg_json["name"], job.name);
-/// ```
 pub fn build_main_json(job: &Job, platform_packages: &BTreeMap<&str, &str>) -> Result<Value> {
     let mut pkg_json = json!({
         "name": job.name,
@@ -300,13 +268,6 @@ pub fn build_main_json(job: &Job, platform_packages: &BTreeMap<&str, &str>) -> R
 /// # Returns
 ///
 /// A JS source string containing the shim code that resolves and invokes the correct native binary path.
-///
-/// # Examples
-///
-/// ```
-/// let shim = generate_shim("my-tool", "mybin", &[]);
-/// assert!(shim.contains("my-tool"));
-/// ```
 fn generate_shim(name: &str, bin: &str, platform_pkgs: &[PackageInfo]) -> String {
     let mut platforms: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
     for pkg in platform_pkgs {
@@ -360,16 +321,6 @@ fn generate_shim(name: &str, bin: &str, platform_pkgs: &[PackageInfo]) -> String
 ///
 /// On success returns `Ok(())`. Returns an error if JSON serialization fails or if writing to
 /// the filesystem fails (errors are annotated with context indicating serialization or write failure).
-///
-/// # Examples
-///
-/// ```
-/// use serde_json::json;
-/// use std::path::Path;
-///
-/// let tmp = Path::new("example.json");
-/// write_json(tmp, &json!({"hello": "world"})).unwrap();
-/// ```
 fn write_json(path: &Path, value: &Value) -> Result<()> {
     let json_str = serde_json::to_string_pretty(value).context("failed to serialize JSON")?;
     fs::write(path, json_str).with_context(|| format!("failed to write {}", path.display()))
@@ -394,21 +345,6 @@ fn write_json(path: &Path, value: &Value) -> Result<()> {
 ///
 /// Returns an error if reading `src_dir`, reading directory entries, or copying any file fails.
 /// Error contexts include the path that failed.
-///
-/// # Examples
-///
-/// ```no_run
-/// use std::path::Path;
-///
-/// // Copy an explicit LICENSE and auto-discover README candidates from `./pkg` into `./out`.
-/// copy_special_files(
-///     Path::new("./pkg"),
-///     Path::new("./out"),
-///     Some(Path::new("LICENSE")),
-///     None,
-///     true,
-/// ).unwrap();
-/// ```
 fn copy_special_files(
     src_dir: &Path,
     dest_dir: &Path,
@@ -485,16 +421,6 @@ pub fn is_license_file(name: &str) -> bool {
 ///
 /// The check compares the file stem (filename without extension) case-insensitively
 /// and returns `true` only if it equals `"readme"`.
-///
-/// # Examples
-///
-/// ```
-/// assert!(is_readme_file("README.md"));
-/// assert!(is_readme_file("readme"));
-/// assert!(is_readme_file("ReadMe.txt"));
-/// assert!(!is_readme_file("readme-old.md"));
-/// assert!(!is_readme_file("not_a_readme.md"));
-/// ```
 fn is_readme_file(name: &str) -> bool {
     Path::new(name)
         .file_stem()
@@ -509,19 +435,6 @@ mod tests {
     use super::platform_package_name;
     use crate::platform::{Cpu, Libc, Os, Platform};
 
-    /// Constructs a Platform from the given OS, CPU, and optional libc.
-    ///
-    /// The returned Platform's `triple` field is formatted as `"{cpu}-{os}"`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let pl = make_platform(Os::Linux, Cpu::X64, None);
-    /// assert_eq!(pl.os, Os::Linux);
-    /// assert_eq!(pl.cpu, Cpu::X64);
-    /// assert_eq!(pl.libc, None);
-    /// assert_eq!(pl.triple, format!("{}-{}", Cpu::X64, Os::Linux));
-    /// ```
     fn make_platform(os: Os, cpu: Cpu, libc: Option<Libc>) -> Platform {
         Platform {
             triple: format!("{cpu}-{os}"),

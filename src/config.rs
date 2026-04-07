@@ -77,17 +77,6 @@ pub struct LoadOpts {
 /// Returns an error if `cargo metadata` or cargo config cannot be loaded, if workspace or
 /// per-crate npm configuration is invalid, if include patterns match no package, or if duplicate
 /// npm package names are produced.
-///
-/// # Examples
-///
-/// ```no_run
-/// use crate::config::{load, LoadOpts};
-///
-/// // Construct options (fill fields as needed); `Default::default()` may be used if available.
-/// let opts = LoadOpts { workspace: true, ..Default::default() };
-/// let build = load(opts).expect("failed to resolve build plan");
-/// println!("Resolved {} jobs", build.jobs.len());
-/// ```
 pub fn load(opts: LoadOpts) -> anyhow::Result<Build> {
     let mut cmd = cargo_metadata::MetadataCommand::new();
     if let Some(path) = &opts.manifest_path {
@@ -204,21 +193,6 @@ pub fn load(opts: LoadOpts) -> anyhow::Result<Build> {
 /// Returns a comma-separated list of glob patterns that do not match any package name in the given Cargo metadata.
 ///
 /// The returned string contains the original pattern texts joined by ", " for every pattern that fails to match any package in `metadata.packages`.
-///
-/// # Examples
-///
-/// ```ignore
-/// use glob::Pattern;
-/// use cargo_metadata::Metadata;
-///
-/// // Given some compiled glob patterns and cargo metadata,
-/// // `unmatched_patterns` returns the patterns that matched no package names.
-/// let patterns = vec![Pattern::new("foo*").unwrap(), Pattern::new("baz").unwrap()];
-/// let metadata = /* obtain cargo_metadata::Metadata from `cargo_metadata::metadata()` or tests */ unimplemented!();
-///
-/// let unmatched = unmatched_patterns(&patterns, &metadata);
-/// println!("{}", unmatched); // e.g. "baz"
-/// ```
 fn unmatched_patterns(patterns: &[glob::Pattern], metadata: &cargo_metadata::Metadata) -> String {
     patterns
         .iter()
@@ -232,14 +206,6 @@ fn unmatched_patterns(patterns: &[glob::Pattern], metadata: &cargo_metadata::Met
 ///
 /// Returns a vector of compiled `glob::Pattern` on success. Errors if any input
 /// string is not a valid glob pattern; the error includes the offending pattern.
-///
-/// # Examples
-///
-/// ```
-/// let specs = vec!["src/**/*.rs".to_string(), "tests/*.rs".to_string()];
-/// let patterns = compile_glob_patterns(&specs).expect("valid patterns");
-/// assert_eq!(patterns.len(), 2);
-/// ```
 fn compile_glob_patterns(specs: &[String]) -> anyhow::Result<Vec<glob::Pattern>> {
     specs
         .iter()
@@ -256,22 +222,6 @@ fn compile_glob_patterns(specs: &[String]) -> anyhow::Result<Vec<glob::Pattern>>
 ///
 /// The function validates that per-crate `out_dir` is not used when operating in
 /// workspace mode and propagates any resolution errors.
-///
-/// # Examples
-///
-/// ```
-/// // This example outlines the intended use. Constructing a real `cargo_metadata::Package`
-/// // is omitted for brevity; in tests you would build a `Package` from `cargo_metadata`
-/// // or a test fixture and then call `resolve_package(...)` to obtain the `Vec<Job>`.
-/// # use std::path::PathBuf;
-/// # // let package: cargo_metadata::Package = ...;
-/// # // let workspace_base: RawConfig = RawConfig::default();
-/// # // let crate_dir = PathBuf::from("crates/mycrate");
-/// # // let cli_targets: Vec<String> = vec![];
-/// # // let cargo_config_targets: Vec<String> = vec![];
-/// # // let jobs = resolve_package(&package, &workspace_base, crate_dir, false, &cli_targets, &cargo_config_targets).unwrap();
-/// // assert!(jobs.iter().all(|j| !j.name.is_empty()));
-/// ```
 fn resolve_package(
     package: &cargo_metadata::Package,
     workspace_base: &RawConfig,
@@ -352,14 +302,6 @@ fn resolve_package(
 ///
 /// Errors are returned if template rendering or JSON rendering fails, or if unknown bin names are
 /// requested.
-///
-/// # Examples
-///
-/// ```rust,ignore
-/// // Construct `raw`, `pkg`, and other inputs then:
-/// let job = resolve(raw, &pkg, &pkg_bins, crate_dir, &cli_targets, &cargo_config_targets)?;
-/// assert_eq!(job.meta.version, pkg.version.to_string());
-/// ```
 fn resolve(
     raw: RawConfig,
     pkg: &cargo_metadata::Package,
@@ -452,35 +394,6 @@ fn resolve(
 
 /// Produce a `RawConfig` by overlaying `other` onto `base`, where each field from
 /// `other` replaces the corresponding field from `base` when present.
-///
-/// # Examples
-///
-/// ```
-/// let base = RawConfig {
-///     name: Some("base-name".into()),
-///     prefix: Some("base-".into()),
-///     bins: None,
-///     targets: None,
-///     out_dir: None,
-///     mode: None,
-///     custom: None,
-/// };
-///
-/// let other = RawConfig {
-///     name: Some("other-name".into()),
-///     prefix: None,
-///     bins: Some(vec!["bin1".into()]),
-///     targets: None,
-///     out_dir: None,
-///     mode: None,
-///     custom: None,
-/// };
-///
-/// let merged = merge(base, other);
-/// assert_eq!(merged.name.as_deref(), Some("other-name"));
-/// assert_eq!(merged.prefix.as_deref(), Some("base-"));
-/// assert_eq!(merged.bins.as_ref().map(|v| v.as_slice()), Some(&["bin1"][..]));
-/// ```
 fn merge(base: RawConfig, other: RawConfig) -> RawConfig {
     RawConfig {
         name: other.name.or(base.name),
@@ -517,16 +430,6 @@ impl RawConfigList {
     /// Flatten a RawConfigList into its contained entries.
     ///
     /// Converts a `Single` into a one-element vector and returns the inner vector for `Multiple`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let single = RawConfigList::Single(Box::new(RawConfig::default()));
-    /// assert_eq!(single.into_vec().len(), 1);
-    ///
-    /// let multiple = RawConfigList::Multiple(vec![RawConfig::default(), RawConfig::default()]);
-    /// assert_eq!(multiple.into_vec().len(), 2);
-    /// ```
     fn into_vec(self) -> Vec<RawConfig> {
         match self {
             RawConfigList::Single(c) => vec![*c],
@@ -545,15 +448,6 @@ mod tests {
     /// The produced package has reasonable default fields (version "0.1.0", a path-based id,
     /// empty targets/dependencies/features, and null/empty optional metadata) suitable for unit tests
     /// that only need a basic package structure.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let pkg = make_fake_package("foo");
-    /// assert_eq!(pkg.name, "foo");
-    /// assert_eq!(pkg.version.to_string(), "0.1.0");
-    /// assert!(pkg.manifest_path.ends_with("Cargo.toml"));
-    /// ```
     fn make_fake_package(name: &str) -> cargo_metadata::Package {
         let json = serde_json::json!({
             "name": name,

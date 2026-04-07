@@ -9,14 +9,6 @@ const END: &str = "# cargo-npm end";
 /// Finds the repository root by walking upward from `start` until an entry named `.git` (file or directory) is found.
 ///
 /// Returns `Some(PathBuf)` pointing to the first ancestor directory that contains a `.git` entry, or `None` if no such ancestor exists.
-///
-/// # Examples
-///
-/// ```
-/// use std::path::Path;
-/// let root = find_git_root(Path::new("."));
-/// // `root` is `Some(path)` when a parent directory contains `.git`, otherwise `None`.
-/// ```
 pub fn find_git_root(start: &Path) -> Option<PathBuf> {
     let mut dir = start;
     loop {
@@ -33,22 +25,6 @@ pub fn find_git_root(start: &Path) -> Option<PathBuf> {
 /// containing a `gitdir: <path>` line, the referenced path is returned (absolute paths are returned as-is,
 /// relative paths are interpreted relative to `repo_root`). Returns `None` if `.git` is missing or the file
 /// cannot be parsed.
-///
-/// # Examples
-///
-/// ```
-/// use std::fs;
-/// use std::path::Path;
-///
-/// let dir = std::env::temp_dir().join("resolve_git_dir_example");
-/// let _ = fs::remove_dir_all(&dir);
-/// fs::create_dir_all(dir.join(".git")).unwrap();
-///
-/// // `.git` is a directory, so the resolved git dir is `<repo_root>/.git`.
-/// assert_eq!(super::resolve_git_dir(&dir).unwrap(), dir.join(".git"));
-///
-/// let _ = fs::remove_dir_all(&dir);
-/// ```
 fn resolve_git_dir(repo_root: &Path) -> Option<PathBuf> {
     let dot_git = repo_root.join(".git");
     if dot_git.is_dir() {
@@ -71,15 +47,6 @@ fn resolve_git_dir(repo_root: &Path) -> Option<PathBuf> {
 /// Update the repository `.git/info/exclude` file with a marker-bounded section listing the given paths relative to the git root.
 ///
 /// This locates the git repository root by walking upward from `starting_dir` and resolves the actual git directory (handles both `.git` directories and gitdir files). It then writes a managed section delimited by the `# cargo-npm begin` / `# cargo-npm end` markers containing each provided path converted to a git-root-relative, forward-slash-separated string. If there is no git repository found, or if `entries` is empty and no exclude file exists, the function does nothing. Filesystem read/write errors are propagated via the returned `Result`.
-///
-/// # Examples
-///
-/// ```no_run
-/// use std::path::PathBuf;
-/// let starting = std::path::Path::new(".");
-/// let entries = vec![PathBuf::from("target/release/mybin")];
-/// cargo_npm::git::update_git_exclude(starting, &entries).unwrap();
-/// ```
 pub fn update_git_exclude(starting_dir: &Path, entries: &[PathBuf]) -> Result<()> {
     let Some(git_root) = find_git_root(starting_dir) else {
         return Ok(());
