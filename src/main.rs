@@ -22,13 +22,6 @@ mod template;
 /// Parses command-line arguments into the Cargo/Npm subcommand and runs either the
 /// generate or publish command. On error, prints a formatted message to stderr and
 /// exits the process with status code 1.
-///
-/// # Examples
-///
-/// ```no_run
-/// // Run the compiled binary from the shell:
-/// // $ mytool npm generate --out-dir ./pkg
-/// ```
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     let cli::Cargo::Npm(npm) = cli::Cargo::parse();
@@ -47,15 +40,6 @@ async fn main() {
 /// Loads Cargo metadata/configuration, optionally cleans and recreates the output directory,
 /// produces platform-specific packages and a main package for each job, copies built binaries
 /// into their platform package directories, and updates Git exclude entries for generated files.
-///
-/// # Examples
-///
-/// ```no_run
-/// use crate::cli;
-/// // Construct `GenerateArgs` as appropriate for your environment and call the command:
-/// let args = cli::GenerateArgs::default();
-/// let _ = crate::cmd_generate(&args);
-/// ```
 ///
 /// Returns `Ok(())` on success, or an error if configuration is invalid or package generation fails.
 fn cmd_generate(args: &cli::GenerateArgs) -> Result<()> {
@@ -178,18 +162,6 @@ fn cmd_generate(args: &cli::GenerateArgs) -> Result<()> {
 ///
 /// Returns an `Err` if npm is unavailable, configuration loading fails, no binary
 /// crates are found, package preparation fails, or any concurrent publish task fails.
-///
-/// # Examples
-///
-/// ```no_run
-/// # use tokio;
-/// # async fn run() -> anyhow::Result<()> {
-/// // Construct `args` from CLI parsing in real usage.
-/// let args = /* parse or construct `cli::PublishArgs` */ unimplemented!();
-/// cmd_publish(&args).await?;
-/// # Ok(())
-/// # }
-/// ```
 async fn cmd_publish(args: &cli::PublishArgs) -> Result<()> {
     publish::which_npm()?;
 
@@ -232,16 +204,6 @@ async fn cmd_publish(args: &cli::PublishArgs) -> Result<()> {
 /// This function resolves the current working directory and returns an error if
 /// the working directory is located inside `output_dir` or if any job's
 /// `crate_dir` is located inside `output_dir`.
-///
-/// # Examples
-///
-/// ```
-/// use std::path::Path;
-/// // Call with an empty job list to verify the check passes for a simple path.
-/// let out = Path::new("target/npm");
-/// let jobs: Vec<crate::config::Job> = Vec::new();
-/// crate::check_safe_to_clean(out, &jobs).unwrap();
-/// ```
 fn check_safe_to_clean(output_dir: &Path, jobs: &[config::Job]) -> Result<()> {
     let cwd = std::env::current_dir().context("failed to resolve current directory")?;
     if cwd.starts_with(output_dir) {

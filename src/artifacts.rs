@@ -22,17 +22,6 @@ use crate::platform::{HOST_PLATFORM, Os, Platform, parse_triple};
 /// # Errors
 ///
 /// Returns an error when no binaries matching `bins` are found in any inspected release directory.
-///
-/// # Examples
-///
-/// ```
-/// use std::path::Path;
-/// let bins = vec!["my-tool".to_string()];
-/// let targets = infer_targets(&bins, Path::new("target")).expect("failed to infer targets");
-/// for triple in targets {
-///     println!("found triple: {}", triple);
-/// }
-/// ```
 pub fn infer_targets(bins: &[String], target_dir: &Path) -> Result<HashSet<String>> {
     let mut candidates: Vec<(String, PathBuf)> = Vec::new();
     match fs::read_dir(target_dir) {
@@ -93,19 +82,6 @@ pub fn infer_targets(bins: &[String], target_dir: &Path) -> Result<HashSet<Strin
 /// Binaries that are not found are skipped; copy and permission-setting failures
 /// are returned as errors. On Windows the destination filenames will have `.exe`
 /// appended; on Unix copied files are made executable (`0o755`).
-///
-/// # Examples
-///
-/// ```
-/// use std::path::Path;
-/// // `platform` can be obtained via `crate::platform::parse_triple`.
-/// let bins = vec!["my-tool".to_string()];
-/// let target_dir = Path::new("target");
-/// let platform = crate::platform::parse_triple("x86_64-unknown-linux-gnu").unwrap();
-/// let dest_dir = Path::new("out");
-/// // Copy any found binaries into `out/` (creates/uses existing files on disk).
-/// let _ = crate::artifacts::copy_bins(&bins, target_dir, &platform, dest_dir);
-/// ```
 pub fn copy_bins(
     bins: &[String],
     target_dir: &Path,
@@ -152,16 +128,6 @@ pub fn copy_bins(
 /// Find requested binaries in a directory, mapping each requested name to the discovered file path.
 ///
 /// For each name in `bins`, checks `dir/<name>` first and, if that does not exist, checks `dir/<name>.exe`. If a matching file is found, the function inserts an entry mapping the requested binary name (without `.exe`) to the file's `PathBuf`. Names with no matching file are omitted from the result.
-///
-/// # Examples
-///
-/// ```
-/// use std::path::Path;
-/// let dir = Path::new("target/release");
-/// let bins = vec!["my-tool".to_string(), "helper".to_string()];
-/// let found = crate::artifacts::scan_bins(dir, &bins);
-/// // `found` contains entries like ("my-tool" => PathBuf) for any binaries present in `dir`.
-/// ```
 fn scan_bins(dir: &Path, bins: &[String]) -> HashMap<String, PathBuf> {
     let mut found = HashMap::new();
     for bin in bins {
@@ -182,14 +148,6 @@ mod tests {
     use crate::platform::HOST_PLATFORM;
     use tempfile::TempDir;
 
-    /// Returns the list of binary names that this crate manages.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let names = bins();
-    /// assert_eq!(names, vec!["my-tool".to_string()]);
-    /// ```
     fn bins() -> Vec<String> {
         vec!["my-tool".to_string()]
     }
