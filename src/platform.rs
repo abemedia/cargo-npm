@@ -54,7 +54,26 @@ pub struct Platform {
 pub static HOST_PLATFORM: LazyLock<Option<Platform>> =
     LazyLock::new(|| parse_triple(env!("TARGET_TRIPLE")));
 
-/// Parses a Rust target triple into an npm [`Platform`].
+/// Parse a Rust target triple into a Platform representing npm-aligned OS, CPU, and optional libc.
+///
+/// Accepts triples like `"x86_64-unknown-linux-gnu"` and maps the architecture, OS, and environment
+/// segments to `Cpu`, `Os`, and `Option<Libc>`. Unknown architectures or OS names result in `None`.
+/// For Linux targets, an environment starting with `"musl"` yields `Libc::Musl`, starting with
+/// `"gnu"` yields `Libc::Glibc`; a Linux triple with any other environment returns `None`.
+///
+/// # Returns
+///
+/// `Some(Platform)` if the triple was successfully mapped; `None` if the architecture or OS is
+/// unsupported, or if a Linux triple's libc environment is unrecognized.
+///
+/// # Examples
+///
+/// ```
+/// let p = parse_triple("x86_64-unknown-linux-gnu").unwrap();
+/// assert_eq!(p.cpu.to_string(), "x64");
+/// assert_eq!(p.os.to_string(), "linux");
+/// assert_eq!(p.libc.unwrap().to_string(), "glibc");
+/// ```
 pub fn parse_triple(triple: &str) -> Option<Platform> {
     let parts: Vec<&str> = triple.splitn(4, '-').collect();
     let arch = parts.first()?;
@@ -99,9 +118,32 @@ pub fn parse_triple(triple: &str) -> Option<Platform> {
     })
 }
 
-/// Strips `libc` from musl platforms that have no glibc counterpart for the same `(os, cpu)`.
+/// Strips `libc` from `musl` platforms that do not have a matching `glibc` platform with the same `(os, cpu)`.
 ///
-/// After this call, `libc == Some(Libc::Musl)` means the platform is one of a dual-libc pair.
+/// After this call, `libc == Some(Libc::Musl)` indicates the platform is part of a dual-libc pair; standalone musl entries will have `libc == None`.
+///
+/// # Examples
+///
+/// ```
+/// let mut platforms: Vec<_> = [
+///     "x86_64-unknown-linux-gnu",
+///     "x86_64-unknown-linux-musl",
+///     "aarch64-unknown-linux-musl",
+/// ]
+/// .iter()
+/// .filter_map(|t| parse_triple(t))
+/// .collect();
+///
+/// normalise_libc(&mut platforms);
+///
+/// // x86_64 musl remains because a glibc counterpart exists
+/// let x86_musl = platforms.iter().find(|p| p.triple.contains("x86_64-unknown-linux-musl")).unwrap();
+/// assert_eq!(x86_musl.libc, Some(Libc::Musl));
+///
+/// // aarch64 musl is stripped because no aarch64 glibc counterpart exists
+/// let aarch_musl = platforms.iter().find(|p| p.triple.contains("aarch64-unknown-linux-musl")).unwrap();
+/// assert_eq!(aarch_musl.libc, None);
+/// ```
 pub fn normalise_libc(platforms: &mut [Platform]) {
     let dual: Vec<bool> = platforms
         .iter()
@@ -119,8 +161,18 @@ pub fn normalise_libc(platforms: &mut [Platform]) {
     }
 }
 
-/// Errors if two platforms would produce the same npm package name.
-/// This catches collisions like x86_64-pc-windows-msvc vs x86_64-pc-windows-gnu.
+/// Detects when multiple Rust target triples would map to the same npm platform and returns an error for the first collision.
+///
+/// The npm platform key is formed as `"<os>-<cpu>-<libc>"`, where the libc component is empty when not present; if two different triples produce the same key, this function returns an error describing the colliding triples and the npm key.
+///
+/// # Examples
+///
+/// ```
+/// # use crate::platform::{Platform, Os, Cpu, Libc, check_collisions};
+/// let p1 = Platform { triple: "x86_64-pc-windows-msvc".into(), os: Os::Win32, cpu: Cpu::X64, libc: None };
+/// let p2 = Platform { triple: "x86_64-pc-windows-gnu".into(), os: Os::Win32, cpu: Cpu::X64, libc: None };
+/// assert!(check_collisions(&[p1, p2]).is_err());
+/// ```
 pub fn check_collisions(platforms: &[Platform]) -> Result<()> {
     let mut seen: HashMap<String, &str> = HashMap::new();
     for platform in platforms {

@@ -29,9 +29,25 @@ struct PlatformPackage {
     platform: Platform,
 }
 
-/// Verifies a job's generated npm packages and returns them ready for publishing.
-/// Checks that the main package directory exists, its `package.json` is correct and bin
-/// shims are present, then verifies each platform package has the right metadata and binaries.
+/// Prepare a package for publishing by validating the main package and its platform-specific packages.
+///
+/// Verifies that the main package directory exists, that its `package.json` contains the expected fields
+/// and that any declared bin shims exist. Derives platform packages from the main package's
+/// `optionalDependencies`, optionally checks that configured targets are present, and validates each
+/// platform package's metadata and required binaries.
+///
+/// # Errors
+///
+/// Returns an error if any verification step fails (missing directories or files, mismatched metadata,
+/// missing platform packages for configured targets, or other validation errors).
+///
+/// # Examples
+///
+/// ```
+/// // `job` must be prepared elsewhere (generation step). This example shows typical usage.
+/// let pkg = prepare(std::path::Path::new("out"), &job).unwrap();
+/// assert_eq!(pkg.name, job.name);
+/// ```
 pub fn prepare(output_dir: &Path, job: &Job) -> Result<Package> {
     let main_dir = output_dir.join(&job.name);
     let main_json = verify_main_package(&main_dir, job)?;
@@ -51,7 +67,21 @@ pub fn prepare(output_dir: &Path, job: &Job) -> Result<Package> {
     })
 }
 
-/// Publishes platform packages concurrently, then publishes the main package.
+/// Publish platform-specific packages concurrently, then publish the main package.
+///
+/// On success the function returns `Ok(())`. It will return an error if any packaging,
+/// npm publish, or registry-check operation fails for any platform package or for the
+/// main package.
+///
+/// # Examples
+///
+/// ```no_run
+/// use std::sync::Arc;
+/// # // types omitted for brevity; create a `Package` appropriate for your project
+/// # async fn example(pkg: crate::publish::Package) {
+/// crate::publish::publish(pkg, Arc::new(Vec::new())).await.unwrap();
+/// # }
+/// ```
 pub async fn publish(pkg: Package, extra_args: Arc<Vec<String>>) -> Result<()> {
     let bins = Arc::new(pkg.bins);
     let mut platform_set = JoinSet::new();
@@ -83,6 +113,30 @@ pub async fn publish(pkg: Package, extra_args: Arc<Vec<String>>) -> Result<()> {
     run_npm_publish(&pkg.dir, &pkg.name, &pkg.version, &extra_args).await
 }
 
+/// Validate the main package directory and return its parsed `package.json`.
+///
+/// Reads and parses `package.json` in `main_dir`, verifies that the file contains
+/// the expected fields for the main package (as produced by `npm::build_main_json`),
+/// and ensures any `bin` entries reference files that exist inside `main_dir`.
+///
+/// # Errors
+///
+/// Returns an error if `main_dir` does not exist, if `package.json` cannot be read
+/// or parsed, if required fields do not match the expected main package JSON, or
+/// if any declared `bin` file is missing.
+///
+/// # Returns
+///
+/// The parsed `package.json` as a `serde_json::Value`.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use std::path::Path;
+/// # use crate::{Job, verify_main_package};
+/// let job = Job { name: "example".into(), ..Default::default() };
+/// let _ = verify_main_package(Path::new("output/example"), &job);
+/// ```
 fn verify_main_package(main_dir: &Path, job: &Job) -> Result<Value> {
     if !main_dir.exists() {
         bail!(
@@ -120,6 +174,43 @@ fn verify_main_package(main_dir: &Path, job: &Job) -> Result<Value> {
     Ok(actual)
 }
 
+/// Derives platform package entries from the main package's `optionalDependencies`.
+///
+/// Parses `main_json["optionalDependencies"]` and for each dependency whose name
+/// begins with `job.prefix` attempts to parse the suffix into a `Platform`
+/// (formats: `<os>-<cpu>` or `<os>-<cpu>-<libc>`). For matching entries it
+/// validates the dependency version equals `job.meta.version` and computes the
+/// package output directory (handles scoped names like `@scope/name`).
+///
+/// Errors if `optionalDependencies` is missing or invalid, if it is empty, or
+/// if any matching dependency has a version different from `job.meta.version`.
+///
+/// # Returns
+///
+/// A `Vec<PlatformPackage>` containing one entry per recognized platform package.
+///
+/// # Examples
+///
+/// ```
+/// # use std::path::Path;
+/// # use serde_json::json;
+/// # // mock Job and PlatformPackage types for the example
+/// # struct Job { name: String, prefix: String, meta: Meta }
+/// # struct Meta { version: String }
+/// # struct PlatformPackage { dir: std::path::PathBuf, name: String, version: String, platform: () }
+/// # type Value = serde_json::Value;
+/// # fn platform_pkgs_from_deps(_: &Path, _: &Job, _: &Value) -> Result<Vec<PlatformPackage>, Box<dyn std::error::Error>> { Ok(vec![]) }
+/// let job = Job { name: "example".into(), prefix: "mypkg-".into(), meta: Meta { version: "1.2.3".into() } };
+/// let main_json = json!({
+///     "optionalDependencies": {
+///         "mypkg-linux-x86_64": "1.2.3",
+///         "otherpkg": "0.1.0"
+///     }
+/// });
+/// let out = platform_pkgs_from_deps(Path::new("out"), &job, &main_json)?;
+/// // `out` will contain a PlatformPackage for "mypkg-linux-x86_64"
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 fn platform_pkgs_from_deps(
     output_dir: &Path,
     job: &Job,
@@ -183,6 +274,24 @@ fn platform_pkgs_from_deps(
     Ok(pkgs)
 }
 
+/// Ensures every target configured in `job.targets` has a corresponding platform package in `pkgs`.
+///
+/// The function parses and normalizes the configured target triples, computes the expected
+/// npm platform package name for each, and verifies that a package with that name exists in
+/// `pkgs`. If any expected platform packages are missing, an error is returned listing the
+/// missing package names and referencing `output_dir`.
+///
+/// # Returns
+///
+/// `Ok(())` when all configured targets are present; an error describing the missing packages otherwise.
+///
+/// # Examples
+///
+/// ```no_run
+/// // Parse configured targets from `job`, normalize libc variants, and ensure corresponding
+/// // platform packages exist under `output_dir`. Returns an error if any are missing.
+/// let _ = check_configured_targets(output_dir, &job, &pkgs);
+/// ```
 fn check_configured_targets(output_dir: &Path, job: &Job, pkgs: &[PlatformPackage]) -> Result<()> {
     let mut configured: Vec<Platform> = job
         .targets
@@ -211,6 +320,24 @@ fn check_configured_targets(output_dir: &Path, job: &Job, pkgs: &[PlatformPackag
     Ok(())
 }
 
+/// Validates a platform package's metadata and required binaries.
+///
+/// Reads and parses the package's `package.json`, verifies that all fields
+/// expected for this platform (as produced by `npm::build_platform_json`) are
+/// present and equal, and checks that every binary listed in `job.bins` exists
+/// in the package directory (using `{bin}.exe` for Windows platforms).
+///
+/// Returns `Ok(())` if all expected JSON fields match and all required binaries
+/// are present; returns an error describing the first mismatch or missing file
+/// otherwise.
+///
+/// # Examples
+///
+/// ```no_run
+/// use std::path::PathBuf;
+/// // Prepare a `PlatformPackage` and `Job` with appropriate fields, then:
+/// // verify_platform_package(&pkg, &job).expect("validation failed");
+/// ```
 fn verify_platform_package(pkg: &PlatformPackage, job: &Job) -> Result<()> {
     if !pkg.dir.exists() {
         bail!(
@@ -245,8 +372,37 @@ fn verify_platform_package(pkg: &PlatformPackage, job: &Job) -> Result<()> {
     Ok(())
 }
 
-/// Recursively checks that every field in `expected` exists with the correct value in `actual`.
-/// For object values, only the expected keys are checked (extra keys in `actual` are ignored).
+/// Validate that all fields and values in an expected JSON fragment are present in an actual JSON value.
+///
+/// Compares `expected` against `actual` recursively. When both values are objects, only keys present in
+/// `expected` are checked (extra keys in `actual` are ignored). For non-object values, the values must
+/// be equal. On mismatch, returns an error with the JSON path and the differing expected/actual values;
+/// the error message also suggests running `cargo npm generate` to update expectations.
+///
+/// # Examples
+///
+/// ```
+/// use serde_json::json;
+/// use anyhow::Result;
+///
+/// let expected = json!({
+///     "name": "pkg",
+///     "bin": {
+///         "prog": "bin/prog"
+///     }
+/// });
+/// let actual = json!({
+///     "name": "pkg",
+///     "version": "1.0.0",
+///     "bin": {
+///         "prog": "bin/prog",
+///         "extra": "ignored"
+///     }
+/// });
+///
+/// // only keys in `expected` are checked, so this should succeed
+/// assert!(crate::check_fields(&expected, &actual, "package").is_ok());
+/// ```
 fn check_fields(expected: &Value, actual: &Value, path: &str) -> Result<()> {
     match (expected, actual) {
         (Value::Object(eo), Value::Object(_)) => {
@@ -281,8 +437,29 @@ pub fn which_npm() -> Result<()> {
     }
 }
 
-/// Builds a `.tgz` for a platform package with correct Unix permission bits.
-/// Required for publishing from Windows where the permission bits of the binary would be lost.
+/// Creates a deterministic `.tgz` tarball for a platform package suitable for npm publishing.
+///
+/// The archive will include `package.json`, the specified binaries (using `.exe` on Windows),
+/// and any license files found in `dir`. Each entry is stored under the `package/` prefix,
+/// file permissions are set to executable for binaries and readable for other files, and a
+/// fixed mtime is used to make the tarball reproducible.
+///
+/// # Errors
+///
+/// Returns an error if creating the temp file, reading files from `dir`, or writing the tar/gzip
+/// streams fails.
+///
+/// # Examples
+///
+/// ```
+/// use std::path::Path;
+/// let dir = Path::new("tests/fixture/pkg");
+/// let bins = vec!["mybin".to_string()];
+/// // platform is a value with .os set appropriately (e.g., platform::Os::Linux)
+/// let platform = platform::Platform { os: platform::Os::Linux, cpu: platform::Cpu::X86_64, libc: None };
+/// let tgz = pack_platform_package(dir, &bins, &platform).unwrap();
+/// assert!(tgz.path().exists());
+/// ```
 fn pack_platform_package(
     dir: &Path,
     bins: &[String],
@@ -339,6 +516,38 @@ fn pack_platform_package(
     Ok(tmp)
 }
 
+/// Publishes a package (directory or tarball) to the npm registry using the configured `NPM` command.
+///
+/// The publication runs `npm publish <path>` with any `extra_args` appended, captures the combined
+/// stdout/stderr output, prints an atomic header `publishing {name}@{version}...` followed by the
+/// captured output, and returns an error if the `npm` process cannot be spawned or exits
+/// unsuccessfully.
+///
+/// # Parameters
+///
+/// - `path`: path to the package directory or packaged tarball to publish.
+/// - `name`: npm package name used in printed messages and error reporting.
+/// - `version`: npm package version used in printed messages and error reporting.
+/// - `extra_args`: additional command-line arguments to pass to `npm publish`.
+///
+/// # Returns
+///
+/// `Ok(())` if `npm publish` completes successfully; `Err(...)` if the command fails to run,
+/// if reading the command output fails, or if `npm publish` exits with a non-zero status.
+///
+/// # Examples
+///
+/// ```no_run
+/// use std::path::Path;
+/// use tokio::runtime::Runtime;
+///
+/// // Synchronously drive the async publish for demo purposes.
+/// let rt = Runtime::new().unwrap();
+/// rt.block_on(async {
+///     // Publish the package at "./dist/mypkg" with no extra args.
+///     let _ = run_npm_publish(Path::new("./dist/mypkg"), "mypkg", "1.0.0", &Vec::new()).await;
+/// });
+/// ```
 async fn run_npm_publish(
     path: &Path,
     name: &str,
@@ -384,7 +593,20 @@ async fn run_npm_publish(
     Ok(())
 }
 
-/// Returns `true` if `name@version` already exists on the registry.
+/// Checks whether the specified npm package version is published on the registry.
+///
+/// Returns `true` if the registry reports the package version exists, `false` if the registry
+/// reports the package/version is not found. Returns an error for other failures (for example,
+/// if the `npm view` command fails for reasons other than a 404).
+///
+/// # Examples
+///
+/// ```
+/// # tokio_test::block_on(async {
+/// let published = is_published("some-package", "1.0.0").await.unwrap();
+/// println!("published: {}", published);
+/// # });
+/// ```
 async fn is_published(name: &str, version: &str) -> Result<bool> {
     let output = tokio::process::Command::new(NPM)
         .args(["view", &format!("{name}@{version}"), "version"])

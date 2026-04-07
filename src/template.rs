@@ -5,8 +5,22 @@ use serde_json::{Map, Value};
 
 /// Substitutes `{key}` and `{env.VAR}` placeholders in a template string.
 ///
-/// Replacement values are provided by the caller via `vars`. Returns an error if a placeholder
-/// references an unknown key, an unset environment variable, or if a `{` is not closed.
+/// For each `{...}` token the placeholder name is looked up in `vars`; if found,
+/// its mapped value is inserted. If the placeholder starts with `env.`, the
+/// remaining suffix is read from the process environment and inserted. Returns
+/// an error if a placeholder references an unknown key, references an unset
+/// environment variable, or if a `{` has no matching `}`.
+///
+/// # Examples
+///
+/// ```
+/// use std::collections::HashMap;
+///
+/// let mut vars = HashMap::new();
+/// vars.insert("name", "Alice");
+/// let rendered = render("hello {name}, home={env.HOME}", &vars).unwrap();
+/// assert!(rendered.starts_with("hello Alice, home="));
+/// ```
 pub fn render(template: &str, vars: &HashMap<&str, &str>) -> Result<String> {
     let mut result = String::with_capacity(template.len());
     let mut rest = template;
@@ -35,8 +49,46 @@ pub fn render(template: &str, vars: &HashMap<&str, &str>) -> Result<String> {
     Ok(result)
 }
 
-/// Recursively substitutes `{key}` and `{env.VAR}` placeholders in all string values of a
-/// serde JSON value. Accepts any type convertible to [`Value`] and returns a [`Value`].
+/// Recursively substitutes template placeholders in all string values of a JSON value.
+///
+/// This function walks the provided JSON value and replaces `{key}` placeholders from `vars`
+/// and `{env.VAR}` placeholders from the environment in every string it encounters.
+/// Non-string JSON values (numbers, booleans, null) are returned unchanged.
+///
+/// # Parameters
+///
+/// - `value`: Any value convertible into `serde_json::Value` to be processed.
+/// - `vars`: Mapping of placeholder names to replacement strings used for `{key}` substitutions.
+///
+/// # Returns
+///
+/// A `serde_json::Value` equivalent to the input with all string placeholders substituted.
+///
+/// # Errors
+///
+/// Returns an error if any string contains an unknown placeholder, references an unset environment
+/// variable, or contains an unclosed `{` brace.
+///
+/// # Examples
+///
+/// ```
+/// use std::collections::HashMap;
+/// use serde_json::json;
+///
+/// let mut vars = HashMap::new();
+/// vars.insert("name", "Alice");
+///
+/// let input = json!({
+///     "greeting": "Hello, {name}!",
+///     "nested": ["literal", "{name}"],
+///     "count": 3
+/// });
+///
+/// let rendered = template::render_json(input, &vars).unwrap();
+/// assert_eq!(rendered["greeting"], "Hello, Alice!");
+/// assert_eq!(rendered["nested"][1], "Alice");
+/// assert_eq!(rendered["count"], 3);
+/// ```
 pub fn render_json(value: impl Into<Value>, vars: &HashMap<&str, &str>) -> Result<Value> {
     match value.into() {
         Value::String(s) => Ok(Value::String(render(&s, vars)?)),

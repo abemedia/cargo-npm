@@ -4,6 +4,12 @@
 const { spawnSync, execSync } = require('child_process')
 const { platform, arch } = process
 
+/**
+ * Detects whether the system's C library is musl.
+ *
+ * Executes `ldd --version` and inspects the command output for the substring `musl`.
+ * @returns {boolean} `true` if the system uses the musl C library, `false` otherwise.
+ */
 function isMusl() {
   let stderr
   try {

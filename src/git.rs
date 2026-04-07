@@ -6,7 +6,17 @@ use anyhow::{Context, Result};
 const BEGIN: &str = "# cargo-npm begin";
 const END: &str = "# cargo-npm end";
 
-/// Walks up the directory tree from `start` until a `.git` directory or file is found.
+/// Finds the repository root by walking upward from `start` until an entry named `.git` (file or directory) is found.
+///
+/// Returns `Some(PathBuf)` pointing to the first ancestor directory that contains a `.git` entry, or `None` if no such ancestor exists.
+///
+/// # Examples
+///
+/// ```
+/// use std::path::Path;
+/// let root = find_git_root(Path::new("."));
+/// // `root` is `Some(path)` when a parent directory contains `.git`, otherwise `None`.
+/// ```
 pub fn find_git_root(start: &Path) -> Option<PathBuf> {
     let mut dir = start;
     loop {
@@ -17,8 +27,28 @@ pub fn find_git_root(start: &Path) -> Option<PathBuf> {
     }
 }
 
-/// Resolves the actual git directory given a repository root (where .git exists).
-/// Handles both .git directories and .git files (gitdir: ...).
+/// Resolve the repository's effective git directory from a repository root that contains a `.git` entry.
+///
+/// If `<repo_root>/.git` is a directory, that directory is returned. If `<repo_root>/.git` is a file
+/// containing a `gitdir: <path>` line, the referenced path is returned (absolute paths are returned as-is,
+/// relative paths are interpreted relative to `repo_root`). Returns `None` if `.git` is missing or the file
+/// cannot be parsed.
+///
+/// # Examples
+///
+/// ```
+/// use std::fs;
+/// use std::path::Path;
+///
+/// let dir = std::env::temp_dir().join("resolve_git_dir_example");
+/// let _ = fs::remove_dir_all(&dir);
+/// fs::create_dir_all(dir.join(".git")).unwrap();
+///
+/// // `.git` is a directory, so the resolved git dir is `<repo_root>/.git`.
+/// assert_eq!(super::resolve_git_dir(&dir).unwrap(), dir.join(".git"));
+///
+/// let _ = fs::remove_dir_all(&dir);
+/// ```
 fn resolve_git_dir(repo_root: &Path) -> Option<PathBuf> {
     let dot_git = repo_root.join(".git");
     if dot_git.is_dir() {
@@ -38,10 +68,18 @@ fn resolve_git_dir(repo_root: &Path) -> Option<PathBuf> {
     }
 }
 
-/// Updates `.git/info/exclude` with binary paths between cargo-npm markers.
+/// Update the repository `.git/info/exclude` file with a marker-bounded section listing the given paths relative to the git root.
 ///
-/// Walks up from `starting_dir` to locate the git root, so this works correctly
-/// in monorepos where `.git` is above the Cargo workspace root.
+/// This locates the git repository root by walking upward from `starting_dir` and resolves the actual git directory (handles both `.git` directories and gitdir files). It then writes a managed section delimited by the `# cargo-npm begin` / `# cargo-npm end` markers containing each provided path converted to a git-root-relative, forward-slash-separated string. If there is no git repository found, or if `entries` is empty and no exclude file exists, the function does nothing. Filesystem read/write errors are propagated via the returned `Result`.
+///
+/// # Examples
+///
+/// ```no_run
+/// use std::path::PathBuf;
+/// let starting = std::path::Path::new(".");
+/// let entries = vec![PathBuf::from("target/release/mybin")];
+/// cargo_npm::git::update_git_exclude(starting, &entries).unwrap();
+/// ```
 pub fn update_git_exclude(starting_dir: &Path, entries: &[PathBuf]) -> Result<()> {
     let Some(git_root) = find_git_root(starting_dir) else {
         return Ok(());

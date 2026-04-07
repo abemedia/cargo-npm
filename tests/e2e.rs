@@ -7,6 +7,20 @@ use tempfile::TempDir;
 struct ChildGuard(std::process::Child);
 
 impl Drop for ChildGuard {
+    /// Terminates and waits for the wrapped child process when the guard is dropped.
+    ///
+    /// The drop implementation attempts to kill the child process and then wait for it,
+    /// ignoring any errors that occur during those operations.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::process::Command;
+    /// // Spawn a short-lived process and wrap it in the guard.
+    /// let child = Command::new("true").spawn().expect("spawn");
+    /// let _guard = crate::ChildGuard(child);
+    /// // `_guard` is dropped at end of scope, ensuring the child is terminated and reaped.
+    /// ```
     fn drop(&mut self) {
         self.0.kill().ok();
         self.0.wait().ok();
@@ -287,6 +301,16 @@ fn e2e_build_publish_install_run() {
     );
 }
 
+/// Selects an available local TCP port by binding to `127.0.0.1:0`.
+///
+/// Returns the port number assigned by the operating system.
+///
+/// # Examples
+///
+/// ```
+/// let port = free_port();
+/// assert!(port > 0);
+/// ```
 fn free_port() -> u16 {
     std::net::TcpListener::bind("127.0.0.1:0")
         .unwrap()
