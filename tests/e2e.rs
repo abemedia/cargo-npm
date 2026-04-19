@@ -91,7 +91,7 @@ fn e2e_build_publish_install_run() {
         }
     });
 
-    let deadline = Instant::now() + Duration::from_secs(180);
+    let deadline = Instant::now() + Duration::from_mins(3);
     let mut log = String::new();
     loop {
         let remaining = deadline.saturating_duration_since(Instant::now());

@@ -324,7 +324,7 @@ fn resolve(
     let bins = if let Some(requested) = raw.bins {
         let unknown: Vec<_> = requested.iter().filter(|b| !pkg_bins.contains(b)).collect();
         if !unknown.is_empty() {
-            bail!("unknown bin(s) {unknown:?} for '{name}'; available: {pkg_bins:?}",);
+            bail!("unknown bin(s) {unknown:?} for '{name}'; available: {pkg_bins:?}");
         }
         requested
     } else {

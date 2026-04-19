@@ -1,20 +1,17 @@
 #!/usr/bin/env node
 'use strict'
 
-const { spawnSync } = require('child_process')
-const { platform, arch } = process
-
 const PLATFORMS = __PLATFORMS__
 
-const binPath = PLATFORMS[platform]?.[arch]
+const binPath = PLATFORMS[process.platform]?.[process.arch]
 
 if (!binPath) {
-  console.error(`__NAME__: unsupported platform: ${platform} ${arch}`)
+  console.error(`Unsupported platform: ${process.platform} ${process.arch}`)
   process.exit(1)
 }
 
 const bin = require.resolve(binPath)
-const result = spawnSync(bin, process.argv.slice(2), { stdio: 'inherit' })
+const result = require('child_process').spawnSync(bin, process.argv.slice(2), { stdio: 'inherit' })
 if (result.error) {
   throw result.error
 }
