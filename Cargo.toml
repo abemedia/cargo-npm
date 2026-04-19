@@ -1,6 +1,6 @@
 [package]
 name = "cargo-npm"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Package and distribute Rust CLI binaries as npm packages"
 repository = "https://github.com/abemedia/cargo-npm"
