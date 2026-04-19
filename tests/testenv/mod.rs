@@ -210,7 +210,7 @@ impl TestEnv {
 
     pub fn read_file(&self, path: &str) -> String {
         fs::read_to_string(self.cwd.join(path))
-            .unwrap_or_else(|e| panic!("failed to read {path}: {e}",))
+            .unwrap_or_else(|e| panic!("failed to read {path}: {e}"))
     }
 
     /// Asserts that a file or directory exists at the given path relative to the project root.
