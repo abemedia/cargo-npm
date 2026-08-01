@@ -6,6 +6,9 @@ description = "Package and distribute Rust CLI binaries as npm packages"
 repository = "https://github.com/abemedia/cargo-npm"
 license = "MIT"
 
+[package.metadata.npm]
+prefix = "@cargo-npm/"
+
 [[bin]]
 name = "cargo-npm"
 path = "src/main.rs"
