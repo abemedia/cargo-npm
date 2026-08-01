@@ -80,10 +80,7 @@ pub async fn publish(pkg: Package, extra_args: Arc<Vec<String>>) -> Result<()> {
         res??;
     }
     if is_published(&pkg.name, &pkg.version).await? {
-        println!(
-            "skipping {}@{} (already published)",
-            &pkg.name, &pkg.version
-        );
+        println!("skipping {}@{} (already published)", pkg.name, pkg.version);
         return Ok(());
     }
     run_npm_publish(&pkg.dir, &pkg.name, &pkg.version, &extra_args).await
