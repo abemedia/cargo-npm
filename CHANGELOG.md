@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3](https://github.com/abemedia/cargo-npm/compare/v0.1.2...v0.1.3) - 2026-08-01
+
+### Other
+
+- add release pipeline uploading binaries and publishing to npm ([#29](https://github.com/abemedia/cargo-npm/pull/29))
+- *(deps)* bump serde from 1.0.228 to 1.0.229 ([#23](https://github.com/abemedia/cargo-npm/pull/23))
+- *(deps)* bump tokio from 1.52.3 to 1.53.1 ([#22](https://github.com/abemedia/cargo-npm/pull/22))
+- *(deps)* bump glob from 0.3.3 to 0.3.4 ([#24](https://github.com/abemedia/cargo-npm/pull/24))
+- *(deps)* bump clap from 4.6.1 to 4.6.4 ([#21](https://github.com/abemedia/cargo-npm/pull/21))
+- *(deps)* bump anyhow from 1.0.103 to 1.0.104 ([#25](https://github.com/abemedia/cargo-npm/pull/25))
+- *(deps)* bump serde_json from 1.0.150 to 1.0.151 ([#27](https://github.com/abemedia/cargo-npm/pull/27))
+- *(deps)* bump toml from 1.1.2+spec-1.1.0 to 1.1.4+spec-1.1.0 ([#26](https://github.com/abemedia/cargo-npm/pull/26))
+- *(deps)* bump actions/setup-node from 6 to 7 ([#20](https://github.com/abemedia/cargo-npm/pull/20))
+- fix clippy useless_borrows_in_formatting warning ([#28](https://github.com/abemedia/cargo-npm/pull/28))
+- *(deps)* bump actions/checkout from 6 to 7 ([#17](https://github.com/abemedia/cargo-npm/pull/17))
+
 ## [0.1.2](https://github.com/abemedia/cargo-npm/compare/v0.1.1...v0.1.2) - 2026-05-01
 
 ### Other
