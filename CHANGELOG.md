@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4](https://github.com/abemedia/cargo-npm/compare/v0.1.3...v0.1.4) - 2026-08-01
+
+Re-release of 0.1.3 with no code changes, cutting a single consistent version across
+crates.io, GitHub and npm after the initial npm release pipeline failed partway through.
+0.1.3 has been retracted (yanked on crates.io, deleted on npm) - use 0.1.4 instead.
+
+cargo-npm is now available on npm (`npm install -g cargo-npm`, or `npx cargo-npm`) and as
+prebuilt binaries via `cargo binstall cargo-npm`.
+
 ## [0.1.3](https://github.com/abemedia/cargo-npm/compare/v0.1.2...v0.1.3) - 2026-08-01
 
 ### Other
