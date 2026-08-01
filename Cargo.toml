@@ -7,6 +7,9 @@ repository = "https://github.com/abemedia/cargo-npm"
 license = "MIT"
 exclude = [".github/"]
 
+[package.metadata.npm]
+prefix = "@cargo-npm/"
+
 [[bin]]
 name = "cargo-npm"
 path = "src/main.rs"
