@@ -1,0 +1,100 @@
+name: Publish
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install musl-tools
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        if: endsWith(matrix.target, '-musl')
+        with:
+          packages: musl-tools
+
+      - name: Build and upload to release
+        uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: cargo-npm
+          target: ${{ matrix.target }}
+          build-tool: cargo
+          locked: true
+          include: LICENSE,README.md
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: npm-${{ matrix.target }}
+          path: |
+            target/*/release/cargo-npm
+            target/*/release/cargo-npm.exe
+          if-no-files-found: error
+
+  publish:
+    name: Publish to npm
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: npm-*
+          path: target/
+          merge-multiple: true
+
+      - name: Install cargo-npm
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-npm
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          registry-url: https://registry.npmjs.org
+
+      - name: Publish to npm
+        run: |
+          cargo npm generate --infer-targets
+          cargo npm publish -- --access public --provenance
