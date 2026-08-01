@@ -5,6 +5,7 @@ edition = "2024"
 description = "Package and distribute Rust CLI binaries as npm packages"
 repository = "https://github.com/abemedia/cargo-npm"
 license = "MIT"
+exclude = [".github/"]
 
 [[bin]]
 name = "cargo-npm"
