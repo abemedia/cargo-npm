@@ -16,7 +16,7 @@ pub fn render(template: &str, vars: &HashMap<&str, &str>) -> Result<String> {
         let end = rest
             .find('}')
             .ok_or_else(|| anyhow::anyhow!("unclosed '{{' in template {template:?}"))?;
-        let var = &rest[..end];
+        let var = rest[..end].trim();
         rest = &rest[end + 1..];
         if let Some(val) = vars.get(var) {
             result.push_str(val);
@@ -66,6 +66,8 @@ mod tests {
     fn substitutes_known_vars() {
         let vars = HashMap::from([("foo", "bar"), ("baz", "qux")]);
         assert_eq!(render("{foo} and {baz}", &vars).unwrap(), "bar and qux");
+        assert_eq!(render("{ foo} and {baz }", &vars).unwrap(), "bar and qux");
+        assert_eq!(render("{ foo } and { baz }", &vars).unwrap(), "bar and qux");
     }
 
     #[test]
