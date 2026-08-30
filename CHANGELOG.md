@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5](https://github.com/abemedia/cargo-npm/compare/v0.1.4...v0.1.5) - 2026-08-30
+
+### Added
+
+- ignore whitespace inside template placeholders ([#39](https://github.com/abemedia/cargo-npm/pull/39))
+
 ## [0.1.4](https://github.com/abemedia/cargo-npm/compare/v0.1.3...v0.1.4) - 2026-08-01
 
 Re-release of 0.1.3 with no code changes, cutting a single consistent version across
