@@ -1,19 +1,23 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
 
 use anyhow::{Context, bail};
 use serde::Deserialize;
 use serde_json::{Map, Value};
-
-#[derive(Deserialize, Default, Clone, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum Mode {
-    #[default]
-    Create,
-    Merge,
-}
+use strum::{Display, EnumIter};
 
 use crate::template::{render, render_json};
+
+pub struct LoadOpts {
+    pub manifest_path: Option<PathBuf>,
+    pub package: Vec<String>,
+    pub workspace: bool,
+    pub exclude: Vec<String>,
+    pub cli_targets: Vec<String>,
+    pub use_cargo_config: bool,
+    pub target_dir: Option<PathBuf>,
+    pub out_dir: Option<String>,
+}
 
 /// Full build plan resolved from `cargo metadata` and npm config.
 pub struct Build {
@@ -29,9 +33,51 @@ pub struct Job {
     pub bins: Vec<String>,
     pub targets: HashSet<String>,
     pub targets_explicit: bool,
+    pub crate_name: String,
     pub crate_dir: PathBuf,
     pub meta: PackageMeta,
     pub mode: Mode,
+    /// Release asset URL template; the host's default layout when unset.
+    pub pkg_url: Option<String>,
+    /// Release asset archive format; every format is tried when unset.
+    pub pkg_fmt: Option<PkgFmt>,
+    /// Binary path template inside a release asset; inferred when unset.
+    pub bin_dir: Option<String>,
+    /// Per-target values for the three keys above, keyed by triple.
+    pub overrides: BTreeMap<String, TargetOverrides>,
+}
+
+#[cfg(test)]
+impl Job {
+    /// A job with defaults for everything but the crate name and its bins.
+    pub fn fake(crate_name: &str, bins: &[&str]) -> Job {
+        Job {
+            name: crate_name.to_owned(),
+            prefix: format!("{crate_name}-"),
+            bins: bins.iter().map(|b| (*b).to_owned()).collect(),
+            targets: HashSet::new(),
+            targets_explicit: false,
+            crate_name: crate_name.to_owned(),
+            crate_dir: PathBuf::from("/fake"),
+            meta: PackageMeta {
+                version: "1.2.3".to_owned(),
+                description: None,
+                license: None,
+                license_file: None,
+                readme_file: None,
+                repository: Some(format!("https://github.com/owner/{crate_name}")),
+                homepage: None,
+                authors: Vec::new(),
+                keywords: Vec::new(),
+                custom: None,
+            },
+            mode: Mode::Create,
+            pkg_url: None,
+            pkg_fmt: None,
+            bin_dir: None,
+            overrides: BTreeMap::new(),
+        }
+    }
 }
 
 /// Cargo package metadata forwarded into generated `package.json` files.
@@ -48,15 +94,35 @@ pub struct PackageMeta {
     pub custom: Option<Map<String, Value>>,
 }
 
-pub struct LoadOpts {
-    pub manifest_path: Option<PathBuf>,
-    pub package: Vec<String>,
-    pub workspace: bool,
-    pub exclude: Vec<String>,
-    pub cli_targets: Vec<String>,
-    pub use_cargo_config: bool,
-    pub target_dir: Option<PathBuf>,
-    pub out_dir: Option<String>,
+#[derive(Deserialize, Default, Clone, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum Mode {
+    #[default]
+    Create,
+    Merge,
+}
+
+/// Archive format of a release asset.
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Display, EnumIter)]
+#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
+pub enum PkgFmt {
+    Tar,
+    Tbz2,
+    Tgz,
+    Txz,
+    Tzstd,
+    Zip,
+    Bin,
+}
+
+/// Release asset keys that may be set per target.
+#[derive(Deserialize, Default, Clone, Debug, PartialEq)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct TargetOverrides {
+    pub pkg_url: Option<String>,
+    pub pkg_fmt: Option<PkgFmt>,
+    pub bin_dir: Option<String>,
 }
 
 /// Reads `cargo metadata` and resolves the full build plan.
@@ -322,6 +388,9 @@ fn resolve(
     let targets: HashSet<String> = targets.into_iter().collect();
 
     let bins = if let Some(requested) = raw.bins {
+        if requested.is_empty() {
+            bail!("`bins` must not be empty for '{name}'; available: {pkg_bins:?}");
+        }
         let unknown: Vec<_> = requested.iter().filter(|b| !pkg_bins.contains(b)).collect();
         if !unknown.is_empty() {
             bail!("unknown bin(s) {unknown:?} for '{name}'; available: {pkg_bins:?}");
@@ -331,14 +400,25 @@ fn resolve(
         pkg_bins.to_vec()
     };
 
+    let overrides = raw.overrides.unwrap_or_default();
+    for key in overrides.keys() {
+        key.parse::<cargo_platform::Platform>()
+            .with_context(|| format!("invalid overrides key '{key}' for '{name}'"))?;
+    }
+
     Ok(Job {
         name,
         prefix,
         bins,
         targets,
         targets_explicit,
+        crate_name,
         crate_dir,
         mode: raw.mode.unwrap_or_default(),
+        pkg_url: raw.pkg_url,
+        pkg_fmt: raw.pkg_fmt,
+        bin_dir: raw.bin_dir,
+        overrides,
         meta: PackageMeta {
             version,
             description: pkg.description.clone(),
@@ -370,6 +450,16 @@ fn merge(base: RawConfig, other: RawConfig) -> RawConfig {
                 Some(base_map)
             }
         },
+        pkg_url: other.pkg_url.or(base.pkg_url),
+        pkg_fmt: other.pkg_fmt.or(base.pkg_fmt),
+        bin_dir: other.bin_dir.or(base.bin_dir),
+        overrides: match (base.overrides, other.overrides) {
+            (None, x) | (x, None) => x,
+            (Some(mut base_map), Some(other_map)) => {
+                base_map.extend(other_map);
+                Some(base_map)
+            }
+        },
     }
 }
 
@@ -383,6 +473,10 @@ struct RawConfig {
     out_dir: Option<String>,
     mode: Option<Mode>,
     custom: Option<Map<String, Value>>,
+    pkg_url: Option<String>,
+    pkg_fmt: Option<PkgFmt>,
+    bin_dir: Option<String>,
+    overrides: Option<BTreeMap<String, TargetOverrides>>,
 }
 
 /// Supports both `[package.metadata.npm]` (object) and `[[package.metadata.npm]]` (array) forms.
@@ -404,7 +498,7 @@ impl RawConfigList {
 
 #[cfg(test)]
 mod tests {
-    use super::{RawConfig, RawConfigList, merge, resolve};
+    use super::{BTreeMap, PkgFmt, RawConfig, RawConfigList, TargetOverrides, merge, resolve};
     use std::path::PathBuf;
 
     fn make_fake_package(name: &str) -> cargo_metadata::Package {
@@ -532,6 +626,108 @@ mod tests {
             Some(&["x86_64-unknown-linux-gnu".to_string()][..])
         );
         assert_eq!(merged.out_dir.as_deref(), Some("out"));
+    }
+
+    #[test]
+    fn merge_asset_keys_per_key() {
+        let workspace = RawConfig {
+            pkg_url: Some("ws-url".into()),
+            pkg_fmt: Some(PkgFmt::Tgz),
+            overrides: Some(BTreeMap::from([("t1".into(), TargetOverrides::default())])),
+            ..Default::default()
+        };
+        let crate_cfg = RawConfig {
+            pkg_fmt: Some(PkgFmt::Zip),
+            overrides: Some(BTreeMap::from([("t2".into(), TargetOverrides::default())])),
+            ..Default::default()
+        };
+        let merged = merge(workspace, crate_cfg);
+        assert_eq!(merged.pkg_url.as_deref(), Some("ws-url"));
+        assert_eq!(merged.pkg_fmt, Some(PkgFmt::Zip));
+        assert_eq!(merged.overrides.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn resolve_keeps_asset_keys() {
+        let pkg = make_fake_package("my-crate");
+        let raw = RawConfig {
+            pkg_url: Some("{ repo }/x".into()),
+            bin_dir: Some("{ bin }".into()),
+            overrides: Some(BTreeMap::from([(
+                "x86_64-pc-windows-msvc".into(),
+                TargetOverrides {
+                    pkg_fmt: Some(PkgFmt::Zip),
+                    ..Default::default()
+                },
+            )])),
+            ..Default::default()
+        };
+        let job = resolve(
+            raw,
+            &pkg,
+            &["my-crate".to_string()],
+            PathBuf::from("/fake"),
+            &[],
+            &[],
+        )
+        .unwrap();
+        assert_eq!(job.crate_name, "my-crate");
+        assert_eq!(job.pkg_url.as_deref(), Some("{ repo }/x"));
+        assert_eq!(job.pkg_fmt, None);
+        assert_eq!(job.bin_dir.as_deref(), Some("{ bin }"));
+        assert_eq!(
+            job.overrides["x86_64-pc-windows-msvc"].pkg_fmt,
+            Some(PkgFmt::Zip)
+        );
+    }
+
+    #[test]
+    fn resolve_rejects_invalid_override_key() {
+        let pkg = make_fake_package("my-crate");
+        let raw = RawConfig {
+            overrides: Some(BTreeMap::from([(
+                "cfg(target_os = linux)".into(),
+                TargetOverrides::default(),
+            )])),
+            ..Default::default()
+        };
+        let err = resolve(
+            raw,
+            &pkg,
+            &["my-crate".to_string()],
+            PathBuf::from("/fake"),
+            &[],
+            &[],
+        )
+        .err()
+        .expect("expected error for invalid override key");
+        assert!(err.to_string().contains("invalid overrides key"), "{err}");
+    }
+
+    #[test]
+    fn override_unknown_field_is_rejected() {
+        let json = r#"{"overrides": {"t": {"bins": ["x"]}}}"#;
+        assert!(serde_json::from_str::<RawConfig>(json).is_err());
+    }
+
+    #[test]
+    fn resolve_rejects_empty_bins() {
+        let pkg = make_fake_package("my-crate");
+        let raw = RawConfig {
+            bins: Some(vec![]),
+            ..Default::default()
+        };
+        let err = resolve(
+            raw,
+            &pkg,
+            &["my-crate".to_string()],
+            PathBuf::from("/fake"),
+            &[],
+            &[],
+        )
+        .err()
+        .expect("expected error for empty bins");
+        assert!(err.to_string().contains("must not be empty"), "{err}");
     }
 
     #[test]

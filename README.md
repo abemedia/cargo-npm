@@ -56,6 +56,15 @@ cargo npm generate # generates packages into npm/
 cargo npm publish  # publish to the npm registry
 ```
 
+If your binaries are already published on a release (by cargo-dist, release-plz,
+`upload-rust-binary-action`, ...), skip the build and fetch them instead:
+
+```sh
+cargo npm generate --from-release
+```
+
+See [Release binaries](#release-binaries).
+
 ## Configuration
 
 ```toml
@@ -175,6 +184,7 @@ passed.
 | `--out-dir <DIR>`        | Output directory (default: `npm`)                                               |
 | `--clean`                | Delete the entire output directory before generating                            |
 | `--infer-targets`        | Infer targets from built binaries instead of requiring explicit configuration   |
+| `--from-release`         | Download binaries from the release for the crate version instead of `target/`   |
 | `--stub`                 | Generate only the main package; skip platform packages and optionalDependencies |
 
 **Binary discovery** - for each configured target triple, **cargo-npm** looks for binaries in
@@ -198,6 +208,64 @@ package:
 
 If `license-file` or `readme` are set in `[package]`, those files are copied instead of using
 auto-detection.
+
+### Release binaries
+
+`cargo npm generate --from-release` downloads the binaries from the release for the version in
+`Cargo.toml` instead of reading `target/`. This fits release pipelines where another tool
+(cargo-dist, release-plz, taiki-e/upload-rust-binary-action, ...) already builds and uploads the
+binaries: the npm packages are generated from exactly those files, on a single runner, with no
+build step.
+
+The release is located from the `repository` field in `Cargo.toml` (required), trying the tags
+`{version}`, `v{version}` and `{name}-v{version}` (plus `{subcrate}/{version}` and
+`{subcrate}/v{version}` when `repository` points at a subdirectory). Targets come from `--target`
+or the `targets` config field; `--infer-targets` is not supported with `--from-release` yet.
+Every configured target must have an asset, otherwise generation fails.
+
+Assets are located and unpacked with [cargo-binstall](https://github.com/cargo-bins/cargo-binstall)'s
+rules: the same default filename patterns (`{name}-{target}-v{version}.tar.gz` and friends),
+the same archive formats (`tar`, `tar.gz`, `tar.xz`, `tar.zst`, `tar.bz2`, `zip`, or a bare
+binary), and the same rule for finding the binary inside the archive. A release that
+`cargo binstall` can install works out of the box, and a release that needs binstall config
+needs the same config here, under `[package.metadata.npm]` instead of
+`[package.metadata.binstall]`.
+
+```toml
+[package.metadata.npm]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }{ archive-suffix }"
+pkg-fmt = "tgz"
+bin-dir = "{ name }-{ target }/{ bin }{ binary-ext }"
+
+# Per-target overrides, keyed by target triple or cfg expression.
+[package.metadata.npm.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"
+
+[package.metadata.npm.overrides.'cfg(target_env = "musl")']
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }-static{ archive-suffix }"
+```
+
+| Key         | Meaning                                                                                        |
+| ----------- | ---------------------------------------------------------------------------------------------- |
+| `pkg-url`   | Asset URL template. Defaults to the release download URL with each default filename in turn.   |
+| `pkg-fmt`   | Archive format: `tgz`, `tar`, `txz`, `tzstd`, `tbz2`, `zip`, or `bin`. Inferred from the name. |
+| `bin-dir`   | Path template of a binary inside the archive. Defaults to binstall's layout detection.         |
+| `overrides` | Any of the above per target. Keys are target triples or `cfg(...)` expressions.                |
+
+Template variables are binstall's: `{ name }` (crate name), `{ repo }`, `{ version }`,
+`{ target }`, `{ target-arch }`, `{ target-vendor }`, `{ target-os }`, `{ target-libc }`,
+`{ target-family }`, `{ archive-format }`, `{ archive-suffix }`, `{ binary-ext }`, `{ bin }`
+(in `bin-dir`), and `{ subcrate }` for workspace crates. Overrides apply in binstall's order: the
+one named after the triple first, then every matching `cfg(...)` override in key order; the last
+one wins per key. Available cfg values are `unix`/`windows`, `target_family`, `target_arch`,
+`target_vendor`, `target_os`, and `target_env`.
+
+Set `GITHUB_TOKEN` for private repositories and draft releases on github.com (also raises the
+API rate limit). The token is only sent to the GitHub API. GitHub, GitLab, Codeberg, Bitbucket and
+SourceForge download URLs are known; any other host needs `pkg-url`.
+
+Downloads are extracted into `.tmp/` inside the output directory (gitignored) and removed when
+generation finishes.
 
 **Output structure:**
 

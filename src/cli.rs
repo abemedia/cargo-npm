@@ -43,6 +43,7 @@ pub struct CommonArgs {
 }
 
 #[derive(Args)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct GenerateArgs {
     #[command(flatten)]
     pub common: CommonArgs,
@@ -61,6 +62,9 @@ pub struct GenerateArgs {
     /// Generate only the main package without platform packages or optionalDependencies
     #[arg(long, conflicts_with_all = ["target", "infer_targets"])]
     pub stub: bool,
+    /// Download binaries from the release for the crate version instead of using the target directory
+    #[arg(long, conflicts_with_all = ["stub", "target_dir"])]
+    pub from_release: bool,
 }
 
 #[derive(Args)]

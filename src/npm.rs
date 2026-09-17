@@ -8,7 +8,7 @@ use serde_json::{Map, Value, json};
 
 use crate::config::{Job, Mode};
 use crate::git_url;
-use crate::platform::{Libc, Os, Platform};
+use crate::platform::{Libc, Platform};
 
 /// Metadata about a generated npm package, returned after writing it to disk.
 pub struct PackageInfo {
@@ -255,11 +255,7 @@ fn generate_shim(name: &str, bin: &str, platform_pkgs: &[PackageInfo]) -> String
         } else {
             pl.os.to_string()
         };
-        let bin_file = if pl.os == Os::Win32 {
-            format!("{bin}.exe")
-        } else {
-            bin.to_string()
-        };
+        let bin_file = pl.bin_filename(bin);
         platforms
             .entry(os_key)
             .or_default()
