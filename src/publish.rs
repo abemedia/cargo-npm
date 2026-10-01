@@ -12,7 +12,7 @@ use tokio::task::JoinSet;
 
 use crate::config::Job;
 use crate::npm;
-use crate::platform::{self, Os, Platform};
+use crate::platform::{self, Platform};
 
 /// A reference to a main package and its platform packages ready for publishing.
 pub struct Package {
@@ -260,11 +260,7 @@ fn verify_platform_package(pkg: &PlatformPackage, job: &Job) -> Result<()> {
         &pkg.name,
     )?;
     for bin in &job.bins {
-        let bin_file = if pkg.platform.os == Os::Win32 {
-            format!("{bin}.exe")
-        } else {
-            bin.clone()
-        };
+        let bin_file = pkg.platform.bin_filename(bin);
         if !pkg.dir.join(&bin_file).exists() {
             bail!(
                 "binary '{bin_file}' missing from '{}' - run `cargo npm generate` to copy artifacts",
@@ -340,11 +336,7 @@ fn pack_platform_package(
     entries.push((dir.join("package.json"), "package.json".to_owned(), 0o644));
 
     for bin in bins {
-        let bin_file = if platform.os == Os::Win32 {
-            format!("{bin}.exe")
-        } else {
-            bin.clone()
-        };
+        let bin_file = platform.bin_filename(bin);
         entries.push((dir.join(&bin_file), bin_file, 0o755));
     }
 

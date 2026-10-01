@@ -497,6 +497,15 @@ fn bins_config_limits_included_binaries() {
 }
 
 #[test]
+fn empty_bins_config_is_error() {
+    let env = TestEnv::package_with_config(toml::toml! {
+        [package.metadata.npm]
+        bins = []
+    });
+    env.assert_err("generate", &[], "`bins` must not be empty");
+}
+
+#[test]
 fn array_form_produces_multiple_packages() {
     let env = TestEnv::package_with_config(toml::toml! {
         [[bin]]

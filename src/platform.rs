@@ -99,6 +99,17 @@ pub fn parse_triple(triple: &str) -> Option<Platform> {
     })
 }
 
+impl Platform {
+    /// Filename of `bin` on this platform: `.exe` is appended on Windows.
+    pub fn bin_filename(&self, bin: &str) -> String {
+        if self.os == Os::Win32 {
+            format!("{bin}.exe")
+        } else {
+            bin.to_owned()
+        }
+    }
+}
+
 /// Resolves target triples to [`Platform`]s.
 ///
 /// Returns the recognised platforms and any unrecognised triples.
