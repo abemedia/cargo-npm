@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5](https://github.com/abemedia/cargo-npm/compare/v0.1.4...v0.1.5) - 2026-11-11
+
+### Added
+
+- ignore whitespace inside template placeholders ([#39](https://github.com/abemedia/cargo-npm/pull/39))
+
+### Other
+
+- *(deps)* bump tokio from 1.53.3 to 1.54.1 ([#49](https://github.com/abemedia/cargo-npm/pull/49))
+- *(deps)* bump toml from 1.1.8+spec-1.1.0 to 1.2.1+spec-1.1.0 ([#50](https://github.com/abemedia/cargo-npm/pull/50))
+- *(deps)* bump flate2 from 1.1.10 to 1.1.11 ([#51](https://github.com/abemedia/cargo-npm/pull/51))
+- *(deps)* bump tokio from 1.53.1 to 1.53.3 ([#46](https://github.com/abemedia/cargo-npm/pull/46))
+- *(deps)* bump serde_json from 1.0.151 to 1.0.154 ([#47](https://github.com/abemedia/cargo-npm/pull/47))
+- *(deps)* bump toml from 1.1.6+spec-1.1.0 to 1.1.8+spec-1.1.0 ([#48](https://github.com/abemedia/cargo-npm/pull/48))
+- *(deps)* bump clap from 4.6.6 to 4.6.7 ([#45](https://github.com/abemedia/cargo-npm/pull/45))
+- *(deps)* bump toml from 1.1.4+spec-1.1.0 to 1.1.6+spec-1.1.0 ([#44](https://github.com/abemedia/cargo-npm/pull/44))
+- *(deps)* bump flate2 from 1.1.9 to 1.1.10 ([#41](https://github.com/abemedia/cargo-npm/pull/41))
+- *(deps)* bump clap from 4.6.5 to 4.6.6 ([#42](https://github.com/abemedia/cargo-npm/pull/42))
+
 ## [0.1.4](https://github.com/abemedia/cargo-npm/compare/v0.1.3...v0.1.4) - 2026-08-01
 
 Re-release of 0.1.3 with no code changes, cutting a single consistent version across
